@@ -1,0 +1,11 @@
+channels:
+  - conda-forge
+  - bioconda
+  - nodefaults
+dependencies:
+  - python >=3.10
+  - tsv-utils
+  - zstandard
+  - sed
+  - ripgrep
+  - pigz

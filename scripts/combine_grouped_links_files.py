@@ -39,11 +39,11 @@ for line in zstandard.open(INCOMING_LINKS_FILE, 'r'):
 # counts.
 for page_id, links in LINKS.items():
   outgoing_links = links.get('outgoing', '')
-  outgoing_links_count = 0 if outgoing_links is '' else len(
+  outgoing_links_count = 0 if outgoing_links == '' else len(
       outgoing_links.split('|'))
 
   incoming_links = links.get('incoming', '')
-  incoming_links_count = 0 if incoming_links is '' else len(
+  incoming_links_count = 0 if incoming_links == '' else len(
       incoming_links.split('|'))
 
   columns = [page_id, str(outgoing_links_count), str(

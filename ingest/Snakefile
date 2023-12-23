@@ -10,6 +10,11 @@ PAGES_FILENAME = f"enwiki-{DOWNLOAD_DATE}-page.sql.gz"
 LINKS_FILENAME = f"enwiki-{DOWNLOAD_DATE}-pagelinks.sql.gz"
 
 
+rule all:
+    input:
+        "work/sdow.sqlite.gz",
+
+
 rule download_sha1sums:
     output:
         sha1sum="data/sha1sum.txt",
@@ -45,6 +50,11 @@ rule download_all:
 
 
 rule trim_redirects:
+    """
+    Output: tsv file with columns:
+        redirect_id (int)
+        redirect_title (not quoted, but escaped with _ for spaces and \' for ')
+    """
     input:
         f"data/{REDIRECTS_FILENAME}",
     output:
@@ -52,17 +62,22 @@ rule trim_redirects:
     shell:
         r"""
         pigz -dc {input} \
-        | rg "^INSERT INTO" \
-        | sed -E -e 's#^INSERT INTO `redirect` VALUES \(##' \
+        | sed -n -E -e 's#^INSERT INTO `redirect` VALUES \(##p' \
+        | sed -E -e "s#\);\$##" \
         | sed -E -e "s#'\),\(([1-9][0-9]*,[0-9]+,')#\n\1#g" \
-        | csv2tsv \
-        | tsv-filter --eq 2:0 \
-        | tsv-select -f 1,3 \
+        | sed -n -E -e "s#^([0-9]+),0,'#\1\t#p" \
+        | sed -E -e "s#','','.*\$##" \
         | zstd -c > {output}
         """
 
 
 rule trim_pages:
+    """
+    Output: tsv file with columns:
+        page_id (int)
+        page_title (not quoted, but escaped with _ for spaces and \' for ')
+        page_is_redirect (0 or 1)
+    """
     input:
         f"data/{PAGES_FILENAME}",
     output:
@@ -71,17 +86,20 @@ rule trim_pages:
         r"""
         # Hello world
         pigz -dc {input} \
-        | rg "^INSERT INTO" \
-        | sed -E -e 's#^INSERT INTO `page` VALUES \(##' \
-        | sed -E -e "s#\),\(([1-9][0-9]*,[0-9]+)#\n\1#g" \
-        | csv2tsv \
-        | tsv-filter --eq 2:0 \
-        | tsv-select -f 1,3,4 \
+        | sed -n -E -e 's#^INSERT INTO `page` VALUES \(##p' \
+        | sed -E -e "s#\);\$##" -e "s#\),\(([1-9][0-9]*,[0-9]+)#\n\1#g" \
+        | sed -n -E -e "s#^([0-9]+),0,'#\1\t#p" \
+        | sed -E -e "s#',([0-1]),[0-9]+,0\.[0-9]*,'[0-9]+','[0-9]+',[0-9]+,[0-9]+,'wikitext',NULL\$#\t\1#" \
         | zstd -c > {output}
         """
 
 
 rule trim_links:
+    """
+    Output: tsv file with columns:
+        source_id (int)
+        target_title (not quoted, but escaped with _ for spaces and \' for ')
+    """
     input:
         f"data/{LINKS_FILENAME}",
     output:
@@ -89,12 +107,10 @@ rule trim_links:
     shell:
         r"""
         pigz -dc {input} \
-        | rg "^INSERT INTO" \
-        | sed -E -e 's#^INSERT INTO `pagelinks` VALUES \(##' \
-        | sed -E -e "s#\),\(([1-9][0-9]*,[0-9]+,')#\n\1#g" \
-        | csv2tsv \
-        | tsv-filter --eq 2:0 \
-        | tsv-select -f 1,3 \
+        | sed -n -E -e 's#^INSERT INTO `pagelinks` VALUES \(##p' \
+        | sed -E -e "s#\);\$##" -e "s#\),\(([1-9][0-9]*,[0-9]+,')#\n\1#g" \
+        | sed -n -E -e "s#^([0-9]+),0,'#\1\t#p" \
+        | sed -E -e "s#',0,NULL\$##" \
         | zstd -c > {output}
         """
 
@@ -107,8 +123,9 @@ rule replace_titles_in_redirects_file:
         "work/redirects.with_ids.tsv.zst",
     shell:
         r"""
+        export LC_ALL=C
         python ../scripts/replace_titles_in_redirects_file.py {input.pages} {input.redirects} \
-        | sort -S 90% -t $'\t' -k 1n,1n \
+        | parsort -S 5% -t $'\t' -k 1n,1n \
         | zstd -c > {output}
         """
 
@@ -145,10 +162,12 @@ rule sort_links_by_source_id:
         "work/links.with_ids.tsv.zst",
     output:
         "work/links.sorted_by_source_id.tsv.zst",
+    threads: 6
     shell:
         r"""
+        export LC_ALL=C
         zstdcat {input} \
-        | sort -S 90% -t $'\t' -k 1n,1n \
+        | parsort -S 5% -t $'\t' -k 1n,1n --compres-program zstd \
         | uniq \
         | zstd -c > {output}
         """
@@ -159,10 +178,12 @@ rule sort_links_by_target_id:
         "work/links.with_ids.tsv.zst",
     output:
         "work/links.sorted_by_target_id.tsv.zst",
+    threads: 6
     shell:
         r"""
+        export LC_ALL=C
         zstdcat {input} \
-        | sort -S 90% -t $'\t' -k 2n,2n \
+        | parsort -S 5% -t $'\t' -k 2n,2n --compress-program zstd \
         | uniq \
         | zstd -c > {output}
         """
@@ -176,7 +197,7 @@ rule group_links_by_source_id:
     shell:
         r"""
         zstdcat {input} \
-        | awk -F '\t' '$1==last {printf "|%s",$2; next} NR>1 {print "";} {last=$1; printf "%s\t%s",$1,$2;} END{print "";}' \
+        | awk -F '\t' '$1==last {{printf "|%s",$2; next}} NR>1 {{print "";}} {{last=$1; printf "%s\t%s",$1,$2;}} END{{print "";}}' \
         | zstd -c > {output}
         """
 
@@ -189,7 +210,7 @@ rule group_links_by_target_id:
     shell:
         r"""
         zstdcat {input} \
-        | awk -F '\t' '$2==last {printf "|%s",$1; next} NR>1 {print "";} {last=$2; printf "%s\t%s",$2,$1;} END{print "";}' \
+        | awk -F '\t' '$2==last {{printf "|%s",$1; next}} NR>1 {{print "";}} {{last=$2; printf "%s\t%s",$2,$1;}} END{{print "";}}' \
         | zstd -c > {output}
         """
 

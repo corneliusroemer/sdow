@@ -5,7 +5,6 @@ non-existing pages, and replaces redirects with the pages to which they redirect
 Output is written to stdout.
 """
 
-import io
 import sys
 import zstandard
 
@@ -34,20 +33,20 @@ if not LINKS_FILE.endswith('.zst'):
 # Create a set of all page IDs and a dictionary of page titles to their corresponding IDs.
 ALL_PAGE_IDS = set()
 PAGE_TITLES_TO_IDS = {}
-for line in zstandard.open(PAGES_FILE, 'r')):
+for line in zstandard.open(PAGES_FILE, 'r'):
   [page_id, page_title, _] = line.rstrip('\n').split('\t')
   ALL_PAGE_IDS.add(page_id)
   PAGE_TITLES_TO_IDS[page_title] = page_id
 
 # Create a dictionary of page IDs to the target page ID to which they redirect.
 REDIRECTS = {}
-for line in zstandard.open(REDIRECTS_FILE, 'r')):
+for line in zstandard.open(REDIRECTS_FILE, 'r'):
   [source_page_id, target_page_id] = line.rstrip('\n').split('\t')
   REDIRECTS[source_page_id] = target_page_id
 
 # Loop through each line in the links file, replacing titles with IDs, applying redirects, and
 # removing nonexistent pages, writing the result to stdout.
-for line in zstandard.open(LINKS_FILE, 'r')):
+for line in zstandard.open(LINKS_FILE, 'r'):
   [source_page_id, target_page_title] = line.rstrip('\n').split('\t')
 
   source_page_exists = source_page_id in ALL_PAGE_IDS
