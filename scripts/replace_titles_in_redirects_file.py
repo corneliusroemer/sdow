@@ -4,12 +4,11 @@ Replaces page titles in the redirects file with their corresponding IDs.
 Output is written to stdout.
 """
 
-from __future__ import print_function
 
 import io
 import sys
 import gzip
-from sets import Set
+import zstandard
 
 # Validate input arguments.
 if len(sys.argv) < 3:
@@ -20,18 +19,18 @@ if len(sys.argv) < 3:
 PAGES_FILE = sys.argv[1]
 REDIRECTS_FILE = sys.argv[2]
 
-if not PAGES_FILE.endswith('.gz'):
-  print('[ERROR] Pages file must be gzipped.')
+if not PAGES_FILE.endswith('.zst'):
+  print('[ERROR] Pages file must be zstdandard compressed.')
   sys.exit()
 
-if not REDIRECTS_FILE.endswith('.gz'):
-  print('[ERROR] Redirects file must be gzipped.')
+if not REDIRECTS_FILE.endswith('.zst'):
+  print('[ERROR] Redirects file must be zstdandard compressed.')
   sys.exit()
 
 # Create a set of all page IDs and a dictionary of page titles to their corresponding IDs.
-ALL_PAGE_IDS = Set()
+ALL_PAGE_IDS = set()
 PAGE_TITLES_TO_IDS = {}
-for line in io.BufferedReader(gzip.open(PAGES_FILE, 'r')):
+for line in zstandard.open(PAGES_FILE, 'r'):
   [page_id, page_title, _] = line.rstrip('\n').split('\t')
   ALL_PAGE_IDS.add(page_id)
   PAGE_TITLES_TO_IDS[page_title] = page_id
@@ -39,7 +38,7 @@ for line in io.BufferedReader(gzip.open(PAGES_FILE, 'r')):
 # Create a dictionary of redirects, replace page titles in the redirects file with their
 # corresponding IDs and ignoring pages which do not exist.
 REDIRECTS = {}
-for line in io.BufferedReader(gzip.open(REDIRECTS_FILE, 'r')):
+for line in zstandard.open(REDIRECTS_FILE, 'r'):
   [source_page_id, target_page_title] = line.rstrip('\n').split('\t')
 
   source_page_exists = source_page_id in ALL_PAGE_IDS
@@ -50,11 +49,11 @@ for line in io.BufferedReader(gzip.open(REDIRECTS_FILE, 'r')):
 
 # Loop through the redirects dictionary and remove redirects which redirect to another redirect,
 # writing the remaining redirects to stdout.
-for source_page_id, target_page_id in REDIRECTS.iteritems():
+for source_page_id, target_page_id in REDIRECTS.items():
   start_target_page_id = target_page_id
 
   redirected_count = 0
-  while target_page_id in REDIRECTS:
+  while target_page_id in REDIRECTS.keys():
     target_page_id = REDIRECTS[target_page_id]
 
     redirected_count += 1

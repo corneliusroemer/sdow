@@ -5,8 +5,8 @@
 - [Data Source](#data-source)
 - [Get the Data Yourself](#get-the-data-yourself)
 - [Database Schema](#database-schema)
-- [Database Creation Script](#database-creation-script)
 - [Historical Search Results](#historical-search-results)
+- [Database Creation Script](#database-creation-script)
 - [Database Creation Process](#database-creation-process)
 
 ## Data Source
@@ -19,7 +19,7 @@ tables:
 1.  [`page`](https://www.mediawiki.org/wiki/Manual:Page_table) - Contains the ID and name (among
     other things) for all pages.
 2.  [`pagelinks`](https://www.mediawiki.org/wiki/Manual:Pagelinks_table) - Contains the source and
-    target pages all links.
+    target pages for all links.
 3.  [`redirect`](https://www.mediawiki.org/wiki/Manual:Redirect_table) - Contains the source and
     target pages for all redirects.
 
