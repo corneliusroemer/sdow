@@ -1,0 +1,99 @@
+DOWNLOAD_DATE = "20231220"
+
+DOWNLOAD_URL = (
+    f"https://mirror.accum.se/mirror/wikimedia.org/dumps/enwiki/{DOWNLOAD_DATE}"
+)
+
+SHA1SUM_FILENAME = f"enwiki-{DOWNLOAD_DATE}-sha1sums.txt"
+REDIRECTS_FILENAME = f"enwiki-{DOWNLOAD_DATE}-redirect.sql.gz"
+PAGES_FILENAME = f"enwiki-{DOWNLOAD_DATE}-page.sql.gz"
+LINKS_FILENAME = f"enwiki-{DOWNLOAD_DATE}-pagelinks.sql.gz"
+
+
+rule download_sha1sums:
+    output:
+        sha1sum="data/sha1sum.txt",
+    shell:
+        """
+        wget -O {output.sha1sum} {DOWNLOAD_URL}/{SHA1SUM_FILENAME}
+        """
+
+
+rule download:
+    input:
+        sha1sum="data/sha1sum.txt",
+    output:
+        file="data/{filename}",
+    shell:
+        """
+        cd data
+        wget -O {wildcards.filename} {DOWNLOAD_URL}/{wildcards.filename}
+        grep {wildcards.filename} sha1sum.txt | sha1sum -c
+        """
+
+
+rule download_all:
+    input:
+        expand(
+            "data/{filename}",
+            filename=[
+                REDIRECTS_FILENAME,
+                PAGES_FILENAME,
+                LINKS_FILENAME,
+            ],
+        ),
+
+
+rule trim_redirects:
+    input:
+        f"data/{REDIRECTS_FILENAME}",
+    output:
+        f"work/redirects.tsv.zst",
+    shell:
+        r"""
+        pigz -dc {input} \
+        | rg "^INSERT INTO" \
+        | sed -E -e 's#^INSERT INTO `redirect` VALUES \(##' \
+        | sed -E -e "s#'\),\(([1-9][0-9]*,[0-9]+,')#\n\1#g" \
+        | csv2tsv \
+        | tsv-filter --eq 2:0 \
+        | tsv-select -f 1,3 \
+        | zstd -c > {output}
+        """
+
+
+rule trim_pages:
+    input:
+        f"data/{PAGES_FILENAME}",
+    output:
+        f"work/pages.tsv.zst",
+    shell:
+        r"""
+        # Hello world
+        pigz -dc {input} \
+        | rg "^INSERT INTO" \
+        | sed -E -e 's#^INSERT INTO `page` VALUES \(##' \
+        | sed -E -e "s#\),\(([1-9][0-9]*,[0-9]+)#\n\1#g" \
+        | csv2tsv \
+        | tsv-filter --eq 2:0 \
+        | tsv-select -f 1,3,4 \
+        | zstd -c > {output}
+        """
+
+
+rule trim_links:
+    input:
+        f"data/{LINKS_FILENAME}",
+    output:
+        f"work/links.tsv.zst",
+    shell:
+        r"""
+        pigz -dc {input} \
+        | rg "^INSERT INTO" \
+        | sed -E -e 's#^INSERT INTO `pagelinks` VALUES \(##' \
+        | sed -E -e "s#\),\(([1-9][0-9]*,[0-9]+,')#\n\1#g" \
+        | csv2tsv \
+        | tsv-filter --eq 2:0 \
+        | tsv-select -f 1,3 \
+        | zstd -c > {output}
+        """
