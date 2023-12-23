@@ -11,12 +11,13 @@ import zstandard
 # Validate inputs
 if len(sys.argv) < 4:
   print('[ERROR] Not enough arguments provided!')
-  print('[INFO] Usage: {0} <pages_file> <redirects_file> <links_file>'.format(sys.argv[0]))
+  print('[INFO] Usage: {0} <pages_file> <redirects_file> <links_file> <unmatched_targets_file>'.format(sys.argv[0]))
   sys.exit()
 
 PAGES_FILE = sys.argv[1]
 REDIRECTS_FILE = sys.argv[2]
 LINKS_FILE = sys.argv[3]
+UNMATCHED_TARGETS_FILE = sys.argv[4]
 
 if not PAGES_FILE.endswith('.zst'):
   print('[ERROR] Pages file must be zstandard compressed.')
@@ -46,16 +47,21 @@ for line in zstandard.open(REDIRECTS_FILE, 'r'):
 
 # Loop through each line in the links file, replacing titles with IDs, applying redirects, and
 # removing nonexistent pages, writing the result to stdout.
-for line in zstandard.open(LINKS_FILE, 'r'):
-  [source_page_id, target_page_title] = line.rstrip('\n').split('\t')
+with zstandard.open(UNMATCHED_TARGETS_FILE, 'w') as unmatched_targets_file:
+  unmatched_targets_file.write('source_id\ttarget_title\n')
+  for line in zstandard.open(LINKS_FILE, 'r'):
+    [source_page_id, target_page_title] = line.rstrip('\n').split('\t')
 
-  source_page_exists = source_page_id in ALL_PAGE_IDS
+    source_page_exists = source_page_id in ALL_PAGE_IDS
 
-  if source_page_exists:
-    source_page_id = REDIRECTS.get(source_page_id, source_page_id)
+    if source_page_exists:
+      source_page_id = REDIRECTS.get(source_page_id, source_page_id)
 
-    target_page_id = PAGE_TITLES_TO_IDS.get(target_page_title)
+      target_page_id = PAGE_TITLES_TO_IDS.get(target_page_title)
 
-    if target_page_id is not None and source_page_id != target_page_id:
-      target_page_id = REDIRECTS.get(target_page_id, target_page_id)
-      print('\t'.join([source_page_id, target_page_id]))
+      if target_page_id is not None and source_page_id != target_page_id:
+        target_page_id = REDIRECTS.get(target_page_id, target_page_id)
+        print('\t'.join([source_page_id, target_page_id]))
+      
+      if target_page_id is None:
+        unmatched_targets_file.write(f'{source_page_id}\t{target_page_title}\n')
