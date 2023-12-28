@@ -62,14 +62,7 @@ rule trim_redirects:
     shell:
         r"""
         pigz -dc {input} \
-        | rg '^INSERT INTO `redirect` VALUES' \
-        | sd -l '^INSERT INTO `redirect` VALUES \(' '' \
-        | sd -l "\);\$" "" \
-        | sd -l "'\),\(([1-9][0-9]*,[0-9]+,')" '\n$1' \
-        | sd -l "^([0-9]+),([0-9]+),'" '$1\t$2\t' \
-        | sd -l "','','.*\$" "" \
-        | tsv-filter --eq 2:0 \
-        | tsv-select -f 1,3 \
+        | wikiparse redirect 2 \
         | zstd -c > {output}
         """
 
@@ -88,13 +81,7 @@ rule trim_pages:
     shell:
         r"""
         pigz -dc {input} \
-        | rg '^INSERT INTO `page` VALUES' \
-        | sd -l '^INSERT INTO `page` VALUES \(' '' \
-        | sd -l "\);\$" "" \
-        | sd -l "\),\(([1-9][0-9]*,[0-9]+)" '\n$1' \
-        | rg "^([0-9]+),0" \
-        | sd -l "^([0-9]+),0,'" '$1\t' \
-        | sd -l "',([0-1]),[0-9]+,0\.[0-9]*,'[0-9]+','[0-9]+',[0-9]+,[0-9]+,'wikitext',NULL\$" '\t$1' \
+        | wikiparse page 5 \
         | zstd -c > {output}
         """
 
@@ -112,13 +99,7 @@ rule trim_links:
     shell:
         r"""
         pigz -dc {input} \
-        | rg '^INSERT INTO `pagelinks` VALUES' \
-        | sd -l '^INSERT INTO `pagelinks` VALUES \(' '' \
-        | sd -l "\);\$" "" \
-        | sd -l "\),\(([1-9][0-9]*,[0-9]+,')" '\n$1' \
-        | rg "^([0-9]+),0" \
-        | sd -l "^([0-9]+),0,'" '$1\t' \
-        | sd -l "',[0-9]+,(NULL|[0-9]+)\$" "" \
+        | wikiparse pagelinks 5 \
         | zstd -c > {output}
         """
 
